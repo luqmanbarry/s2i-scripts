@@ -1,0 +1,55 @@
+#!/bin/bash -e
+
+# Source common S2I functions
+source ${JWS_HOME}/bin/launch/s2i-core.sh
+
+echo "---> JWS 5.8 OpenJDK17 S2I assemble script starting..."
+
+# Restore saved artifacts from previous build
+if [ -d /tmp/artifacts ]; then
+    echo "---> Restoring previously built artifacts..."
+    cp -rp /tmp/artifacts/* ${HOME}/
+fi
+
+# Install application source
+echo "---> Installing application source..."
+if [ -d /tmp/src ]; then
+    shopt -s dotglob
+    mv /tmp/src/* ${HOME}/
+    shopt -u dotglob
+fi
+
+# Build application
+echo "---> Building application..."
+if [ -f "$(get_maven_build_file)" ]; then
+    echo "---> Using Maven build..."
+    maven_build
+elif [ -f "$(get_gradle_build_file)" ]; then
+    echo "---> Using Gradle build..."
+    gradle_build
+else
+    echo "---> No build tool detected. Using existing artifacts."
+fi
+
+# Deploy to webapps
+DEPLOY_DIR="${JWS_HOME}/webapps"
+echo "---> Deploying to ${DEPLOY_DIR}"
+
+shopt -s nullglob
+[ -d "target" ] && cp -p target/*.{war,ear} ${DEPLOY_DIR}/
+[ -d "build/libs" ] && cp -p build/libs/*.{war,jar} ${DEPLOY_DIR}/
+[ -n "$(find . -maxdepth 1 -name '*.war' -o -name '*.ear')" ] && cp -p *.war *.ear ${DEPLOY_DIR}/
+shopt -u nullglob
+
+# Handle context root
+if [ $(ls ${DEPLOY_DIR}/*.war 2>/dev/null | wc -l) -eq 1 ]; then
+    CONTEXT_ROOT=${CONTEXT_ROOT:-ROOT}
+    echo "---> Renaming WAR to ${CONTEXT_ROOT}.war"
+    mv ${DEPLOY_DIR}/*.war ${DEPLOY_DIR}/${CONTEXT_ROOT}.war 2>/dev/null || true
+fi
+
+# Fix permissions for OpenShift
+echo "---> Fixing permissions..."
+fix_permissions "${DEPLOY_DIR}"
+
+echo "---> JWS 5.8 OpenJDK17 assembly complete"
