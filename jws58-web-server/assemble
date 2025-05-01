@@ -19,6 +19,7 @@ if [ -d /tmp/src ]; then
     shopt -u dotglob
 fi
 
+## COMMENT OUT TO SKIP ARTIFACT BUILD
 # Build application
 echo "---> Building application..."
 if [ -f "$(get_maven_build_file)" ]; then
